@@ -158,31 +158,11 @@ public class Region {
         System.out.println();
     }
 
-    public BufferedImage getCollisionRender(int plane, int scale) {
-        BufferedImage image = new BufferedImage(tilesDimension.width * scale, tilesDimension.height * scale, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D graphics = image.createGraphics();
-        graphics.setComposite(AlphaComposite.SrcOver.derive(0.5f));
-        for (int x = 0; x < tilesDimension.width; x++) {
-            for (int y = 0; y < tilesDimension.height; y++) {
-                RSRegionBlock block = blocks[getBlockX(x)][getBlockY(y)];
-                if(block != null){
-                    int flag = block.maps[0].clipData[getBlockTileX(x, block.blockX)][getBlockTileY(y, block.blockY)];
-                    graphics.setColor((flag & (TileFlags.WALL_NORTH)) != 0 ? Color.RED : Color.GREEN);
-                    graphics.fill(new Rectangle(x * scale, (tilesDimension.height - y) * scale, scale, scale));
-                }
-            }
-        }
-        return image;
-    }
-
-    public List<TileNode> getCollisionNodeMap(int plane, int step) {
+    public List<TileNode> getConnectedNodeMap(int plane, int step) {
         TileNode[][] nodes = new TileNode[sizeX * BLOCK_SIZE][sizeY * BLOCK_SIZE];
         for(int x = 0; x < tilesDimension.width; x += step){
-            int blockX = getBlockX(x);
             for(int y = 0; y < tilesDimension.height; y += step) {
-                int blockY = getBlockY(y);
-                RSRegionBlock block = blocks[blockX][blockY];
-                nodes[x][y] = new TileNode(x, y, plane, block.maps[plane].clipData[getBlockTileX(x, blockX)][getBlockTileY(y, blockY)]);
+                nodes[x][y] = new TileNode(x, y, plane, collisionMaps[0].clipData[x][y]);
             }
         }
         for(int x = 0; x < tilesDimension.width; x += step){
@@ -337,11 +317,6 @@ public class Region {
             return true;
         }
         boolean wall = false;
-        RSRegionBlock block = blocks[getBlockX(x)][getBlockY(y)];
-        if(block != null){
-            int flag = block.maps[0].clipData[getBlockTileX(x, block.blockX)][getBlockTileY(y, block.blockY)];
-            wall = (flag & (TileFlags.WALL_MASK | TileFlags.OBJECT_MASK | TileFlags.WALL_BLOCK_MASK)) != 0;
-        }
         int flag = tile.flag;
         for (RSObject object : tile.objects) {
             ObjectDefinition def = object.getDef();

@@ -1,7 +1,5 @@
 package org.dreambot.cache.game.impl.runescape.oldschool.region;
 
-import org.dreambot.algos.search.astar.CollisionPathFinder;
-import org.dreambot.algos.search.astar.TileNode;
 import org.dreambot.cache.fs.runescape.Container;
 import org.dreambot.cache.fs.runescape.XTEALoader;
 import org.dreambot.cache.fs.runescape.data.CacheIndex;
@@ -27,8 +25,6 @@ public class RSRegionBlock {
     private final RSTile[][][] tiles = new RSTile[PLANES][BLOCK_SIZE][BLOCK_SIZE];
     private final Region region;
 
-    public CollisionMap[] maps;
-    public CollisionPathFinder[] pathFinders;
     public int blockX;
     public int blockY;
     private int regionID;
@@ -38,13 +34,6 @@ public class RSRegionBlock {
         this.blockX = blockX;
         this.blockY = blockY;
         regionID = -1;
-        this.maps = new CollisionMap[PLANES];
-        this.pathFinders = new CollisionPathFinder[PLANES];
-        for(int z = 0; z < PLANES; z++){
-            CollisionMap map = new CollisionMap(this, BLOCK_SIZE, BLOCK_SIZE, z);
-            this.maps[z] = map;
-            this.pathFinders[z] = new CollisionPathFinder(map, z);
-        }
         int terrainID = CacheManager.getFileID(Region.TABLE, "m" + blockX + "_" + blockY);
         int landscapeID = CacheManager.getFileID(Region.TABLE, "l" + blockX + "_" + blockY);
         if (terrainID != -1 && landscapeID != -1) {
@@ -67,27 +56,10 @@ public class RSRegionBlock {
                     }
                 }
                 createRegionScene();
-                System.out.println("Constructing Pathfinders...");
-                for(CollisionPathFinder finder : pathFinders){
-                    finder.construct();
-                }
             } catch (IOException e) {
                 System.err.println("Couldn't read: " + blockX + "_" + blockY);
             }
         }
-    }
-
-
-    private TileNode[][] getRawNodeMap(int plane, int step) {
-        TileNode[][] nodes = new TileNode[BLOCK_SIZE][BLOCK_SIZE];
-        for(int x = 0; x < BLOCK_SIZE; x += step){
-            for(int y = 0; y < BLOCK_SIZE; y += step){
-                int flag = maps[plane].clipData[x][y];
-                TileNode tileNode = new TileNode(x, y, plane, flag);
-                nodes[x][y] = tileNode;
-            }
-        }
-        return nodes;
     }
 
     public Point getGameWorldCoordinate() {
@@ -115,7 +87,6 @@ public class RSRegionBlock {
                                 int x_ = (blockX - region.startX) * BLOCK_SIZE; //adding block base
                                 int y_ = (blockY - region.startY) * BLOCK_SIZE; //adding block base
                                 region.collisionMaps[originalPlane].markBlocked(x + x_, y + y_);
-                                maps[originalPlane].markBlocked(x, y);
                             }
                         }
                     }
@@ -130,7 +101,6 @@ public class RSRegionBlock {
                         int x_ = (blockX - region.startX) * BLOCK_SIZE; //adding block base
                         int y_ = (blockY - region.startY) * BLOCK_SIZE; //adding block base
                         region.collisionMaps[0].clipData[x + x_][y + y_] = TileFlags.UNLOADED;
-                        maps[0].clipData[x][y] = TileFlags.UNLOADED;
                     }
                 }
             }
@@ -164,7 +134,6 @@ public class RSRegionBlock {
                             mapZ = mapZ - 1;
                         }
                         RSObject object = new RSObject(tile.x, tile.y, objectId, objSetting, objType, objFace, mapZ);
-                        maps[mapZ].mark(object);
                         region.collisionMaps[mapZ].mark(this, object);
                         tile.objects.add(object);
                     }

@@ -1,6 +1,6 @@
 package org.dreambot.cache.tools;
 
-import org.dreambot.algos.search.NotoSearch;
+import org.dreambot.algos.search.RegionCrawler;
 import org.dreambot.algos.search.astar.TileNode;
 import org.dreambot.cache.game.impl.runescape.oldschool.region.Region;
 import org.dreambot.cache.game.impl.runescape.oldschool.render.RSMapRenderer;
@@ -10,7 +10,6 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -32,7 +31,7 @@ public class DumpSingleRegionCollision {
             BufferedImage planeImage = renderer.getPlaneImage(5, i);
             if(i == 0){
                 Graphics2D graphics = planeImage.createGraphics();
-                List<TileNode> generate = region.getCollisionNodeMap(0, 4);
+                List<TileNode> generate = RegionCrawler.generate(region,0, 4);
                 graphics.setColor(Color.YELLOW);
                 generate.stream().filter(Objects::nonNull).filter(n -> !n.getNeighbors().isEmpty()).forEach(g -> {
                     int y = region.tilesDimension.height - g.getY();

@@ -79,10 +79,11 @@ public class TileNode {
         return new Point(x, y).toString();
     }
 
-    public void connect(TileNode[][] map, RegionPathFinder finder, int step) {
+    public TileNode connect(TileNode[][] map, RegionPathFinder finder, int step) {
         for(Direction4 direction : Direction4.values()) {
             translate(direction, map, finder, step);
         }
+        return this;
     }
 
     private void translate(Direction4 direction, TileNode[][] map, RegionPathFinder finder, int step) {

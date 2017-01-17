@@ -3,7 +3,6 @@ package org.dreambot.cache.game.impl.runescape.oldschool.region;
 import org.dreambot.algos.search.astar.PathNode;
 import org.dreambot.algos.search.astar.Tile;
 import org.dreambot.algos.search.astar.TileNode;
-import org.dreambot.cache.game.impl.runescape.oldschool.region.CollisionMap;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -69,7 +68,7 @@ public class RegionPathFinder {
         int sideY = (region.sizeY * BLOCK_SIZE) * scale;
         BufferedImage image = new BufferedImage(sideX, sideY, BufferedImage.TYPE_INT_RGB);
         Graphics2D graphics = image.createGraphics();
-        graphics.setColor(Color.YELLOW);
+        graphics.setColor(Color.CYAN);
         Stream.of(tiles).flatMap(Stream::of).forEach(t -> {
             t.getNeighbors().stream().filter(Objects::nonNull).forEach(n -> {
                 graphics.drawLine(t.getX() * scale, sideY - (t.getY() * scale), n.getX() * scale, sideY - (n.getY() * scale));
