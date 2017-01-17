@@ -162,7 +162,7 @@ public class Region {
         TileNode[][] nodes = new TileNode[sizeX * BLOCK_SIZE][sizeY * BLOCK_SIZE];
         for(int x = 0; x < tilesDimension.width; x += step){
             for(int y = 0; y < tilesDimension.height; y += step) {
-                nodes[x][y] = new TileNode(x, y, plane, collisionMaps[0].clipData[x][y]);
+                nodes[x][y] = new TileNode(x, y, plane, collisionMaps[0].clipData[x][y], x, y);
             }
         }
         for(int x = 0; x < tilesDimension.width; x += step){

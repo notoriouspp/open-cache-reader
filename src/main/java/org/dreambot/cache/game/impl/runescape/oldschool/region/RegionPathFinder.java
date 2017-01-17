@@ -24,10 +24,11 @@ import static org.dreambot.util.Constants.BLOCK_SIZE;
  */
 public class RegionPathFinder {
 
-    public static final int MAX_DEPTH = 1000;
+    public static final int MAX_DEPTH = 32;
     private final int clipWidth;
     private final int clipHeight;
     private final Region region;
+    private final int z;
     private RCollisionMap map;
     private TileNode[][] tiles;
 
@@ -37,9 +38,10 @@ public class RegionPathFinder {
         clipWidth = this.region.sizeX * BLOCK_SIZE;
         clipHeight = region.sizeY * BLOCK_SIZE;
         tiles = new TileNode[clipWidth][clipHeight];
+        z = plane;
         for(int x = 0; x < tiles.length; x++){
             for(int y = 0; y < tiles[x].length; y++){
-                TileNode tileNode = new TileNode(x, y, plane, map.clipData[x][y]);
+                TileNode tileNode = new TileNode(x, y, z, map.clipData[x][y], x, y);
                 tiles[x][y] = tileNode;
             }
         }
@@ -71,9 +73,26 @@ public class RegionPathFinder {
         graphics.setColor(Color.CYAN);
         Stream.of(tiles).flatMap(Stream::of).forEach(t -> {
             t.getNeighbors().stream().filter(Objects::nonNull).forEach(n -> {
-                graphics.drawLine(t.getX() * scale, sideY - (t.getY() * scale), n.getX() * scale, sideY - (n.getY() * scale));
+                graphics.drawLine(t.x * scale, sideY - (t.y * scale), n.x * scale, sideY - (n.y * scale));
             });
         });
+        graphics.setColor(Color.GREEN);
+        int x1 = 3;
+        int y1 = 78;
+        int x2 = 12;
+        int y2 = 78;
+        graphics.fill(new Rectangle(x1 * scale, y1 * scale, scale, scale));
+        graphics.setColor(Color.ORANGE);
+        graphics.fill(new Rectangle(x2 * scale, y2 * scale, scale, scale));
+        System.out.println(region.isClipped(x1, y2, 0));
+        System.out.println(region.isClipped(x2, y2, 0));
+        List<Tile> path = findPath(x1, y1, x2, y2);
+        System.out.println(path);
+        if(path != null) {
+            graphics.setStroke(new BasicStroke(2));
+            graphics.setColor(Color.GREEN);
+            path.forEach(p ->  graphics.fill(new Rectangle(p.getX() * scale, p.getY() * scale, scale, scale)));
+        }
         File output = new File("regions\\region" + map.z  + "reagionCollisionTest.png");
         if(!output.exists()){
             output.mkdirs();
@@ -86,11 +105,11 @@ public class RegionPathFinder {
         return this;
     }
 
-    public boolean canReach(int sX, int sY, int dX, int dY) {
+    public List<Tile> findPath(int sX, int sY, int dX, int dY) {
         List<PathNode> open = new ArrayList<>();
         List<PathNode> closed = new ArrayList<>();
-        if(sX >= 0 && sX < BLOCK_SIZE && sY >= 0 && sY < BLOCK_SIZE){
-            if(dX >= 0 && dX < BLOCK_SIZE && dY >= 0 && dY < BLOCK_SIZE){
+        if(sX >= 0 && sX < clipWidth && sY >= 0 && sY < clipHeight){
+            if(dX >= 0 && dX < clipWidth && dY >= 0 && dY < clipHeight){
                 TileNode start = tiles[sX][sY];
                 TileNode destination = tiles[dX][dY];
                 open.add(new PathNode(start, start, destination));
@@ -98,13 +117,18 @@ public class RegionPathFinder {
                 while(!open.isEmpty() && depth++ < MAX_DEPTH){
                     Collections.sort(open);
                     PathNode current = open.get(0);
-                    if (current.getX() == dX && current.getX() == dY) {
-                        return true;
+                    if (current.getX() == destination.getX() && current.getY() == destination.getY()) {
+                        Tile[] raw = reverseArray(retracePath(current));
+                        List<Tile> list = new ArrayList<>();
+                        if(raw != null) {
+                            Collections.addAll(list, raw);
+                        }
+                        return list;
                     }
                     List<TileNode> nodes =  tiles[current.getX()][current.getY()].getNeighbors();
                     if(!nodes.isEmpty()){
                         nodes.forEach(n -> {
-                            PathNode node = new PathNode(tiles[n.getX()][n.getY()], start, destination);
+                            PathNode node = new PathNode(tiles[n.x][n.y], start, destination);
                             if(!open.contains(node) && !closed.contains(node)) {
                                 node.setOwner(current);
                                 open.add(node);
@@ -116,6 +140,33 @@ public class RegionPathFinder {
                 }
             }
         }
-        return false;
+        return null;
+    }
+
+    private Tile[] retracePath(PathNode current) {
+        ArrayList<Tile> points = new ArrayList<>();
+        points.add(current.toTile());
+        while (current.getOwner() != null) {
+            current = current.getOwner();
+            points.add(new Tile(current.getX(), current.getY(), z));
+        }
+        return points.toArray(new Tile[points.size()]);
+    }
+
+    private static Tile[] reverseArray(Tile[] arr) {
+        if (arr == null) {
+            return null;
+        }
+        for (int i = 0; i < arr.length / 2; i++) {
+            Tile temp = arr[i];
+            arr[i] = arr[arr.length - i - 1];
+            arr[arr.length - i - 1] = temp;
+        }
+        return arr;
+    }
+
+    public boolean canReach(int sX, int sY, int dX, int dY) {
+        List<Tile> path = findPath(sX, sY, dX, dY);
+        return path != null && !path.isEmpty();
     }
 }

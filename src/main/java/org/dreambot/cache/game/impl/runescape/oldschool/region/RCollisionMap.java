@@ -372,7 +372,11 @@ public class RCollisionMap {
      * @return true if the tile is blocked, and cannot be walked on; otherwise false.
      */
     public static boolean isBlocked(int flag) {
-        return (flag & (OBJECT_MASK | DECORATION_BLOCK)) != 0;
+        return (flag & (OBJECT_MASK)) != 0;
+    }
+
+    public static boolean isWallBlocked(int flag) {
+        return (flag & (OBJECT_MASK | WALL_MASK)) != 0;
     }
 
     /**

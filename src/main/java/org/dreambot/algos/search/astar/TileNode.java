@@ -1,8 +1,6 @@
 package org.dreambot.algos.search.astar;
 
-import org.dreambot.algos.search.Direction4;
 import org.dreambot.cache.game.impl.runescape.oldschool.region.RSRegionBlock;
-import org.dreambot.cache.game.impl.runescape.oldschool.region.Region;
 import org.dreambot.cache.game.impl.runescape.oldschool.region.RegionPathFinder;
 
 import java.awt.*;
@@ -20,33 +18,54 @@ import static org.dreambot.util.Constants.BLOCK_SIZE;
  * @since : 7/2/2015
  * Time : 3:50 PM
  */
-public class TileNode {
+public class TileNode extends Point {
 
-    private int x;
-    private int y;
+    private final int archive;
+    private final int index;
     private int z;
     private int flag;
 
     private List<TileNode> neighbors;
 
-    public TileNode(int x, int y, int z, int flag) {
-        this.x = x;
-        this.y = y;
+    public TileNode(int x, int y, int z, int flag, int archive, int index) {
+        super(x, y);
         this.z = z;
         this.flag = flag;
+        this.archive = archive;
+        this.index = index;
         neighbors = new ArrayList<>();
     }
 
-    public int getX() {
-        return x;
-    }
-
-    public int getY() {
-        return y;
+    public double distance(TileNode node) {
+        return new Point(x, y).distance(node.getX(), node.getY());
     }
 
     public int getZ() {
         return z;
+    }
+
+    public void setX(int x) {
+        this.x = x;
+    }
+
+    public void setY(int y) {
+        this.y = y;
+    }
+
+    public void setZ(int z) {
+        this.z = z;
+    }
+
+    public int getArchive() {
+        return archive;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public void setFlag(int flag) {
+        this.flag = flag;
     }
 
     public int getFlag() {
@@ -68,7 +87,14 @@ public class TileNode {
         }
     }
 
-
+    @Override
+    public boolean equals(Object obj) {
+        if(obj instanceof TileNode){
+            return x == ((TileNode) obj).x
+                    && y == ((TileNode) obj).y;
+        }
+        return super.equals(obj);
+    }
 
     public List<TileNode> getNeighbors() {
         return neighbors;
@@ -80,22 +106,27 @@ public class TileNode {
     }
 
     public TileNode connect(TileNode[][] map, RegionPathFinder finder, int step) {
-        for(Direction4 direction : Direction4.values()) {
-            translate(direction, map, finder, step);
+        for(int x = -step; x <= step; x += step){
+            translate(x, 0, map, finder);
+        }
+        for(int y = -step; y <= step; y += step){
+            translate(0, y, map, finder);
         }
         return this;
     }
 
-    private void translate(Direction4 direction, TileNode[][] map, RegionPathFinder finder, int step) {
-        int x = getX() + direction.getX() * step;
-        int y = getY() + direction.getY() * step;
+    private void translate(int offsetX, int offsetY, TileNode[][] map, RegionPathFinder finder) {
+        int x = archive + offsetX;
+        int y = index + offsetY;
         int length = map.length;
         if(x >= 0 && y >= 0 && x < length && y < length){
             TileNode tileNode = map[x][y];
-            if(tileNode != null && !tileNode.getNeighbors().contains(this) && !getNeighbors().contains(tileNode)){
-                boolean canReach = finder.canReach(getX(), getY(), x, y);
-                if(canReach){
+            boolean canReach = finder.canReach(this.x, this.y, x, y);
+            if(canReach){
+                if(!getNeighbors().contains(tileNode)) {
                     getNeighbors().add(tileNode);
+                }
+                if(!tileNode.getNeighbors().contains(this)) {
                     tileNode.getNeighbors().add(this);
                 }
             }

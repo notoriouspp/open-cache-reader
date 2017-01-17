@@ -21,7 +21,7 @@ import static org.dreambot.util.Constants.PLANES;
  */
 public class DumpSingleRegionCollision {
     public static void main(String[] args) throws IOException {
-        Region region = new Region(50, 50, 2, 2);
+        Region region = new Region(50, 50, 4, 4);
         RSMapRenderer renderer = new RSMapRenderer(region);
         for (int i = 0; i < PLANES; i++) {
             File output = new File("regions\\region" + region.startX + "_" + region.startY + "_" + i + ".png");
@@ -31,14 +31,13 @@ public class DumpSingleRegionCollision {
             BufferedImage planeImage = renderer.getPlaneImage(5, i);
             if(i == 0){
                 Graphics2D graphics = planeImage.createGraphics();
-                List<TileNode> generate = RegionCrawler.generate(region,0, 4);
-                graphics.setColor(Color.YELLOW);
+                List<TileNode> generate = RegionCrawler.generate(region,0, 3);
+                graphics.setColor(Color.CYAN);
                 generate.stream().filter(Objects::nonNull).filter(n -> !n.getNeighbors().isEmpty()).forEach(g -> {
-                    int y = region.tilesDimension.height - g.getY();
+                    int y = region.tilesDimension.height - g.y;
                     g.getNeighbors().forEach(n -> {
-                        int y1 = region.tilesDimension.height - n.getY();
-                        graphics.drawLine(g.getX() * 4, y, n.getX() * 4, y1);
-                        System.out.println("we hit gold boys");
+                        int y1 = region.tilesDimension.height - n.y;
+                        graphics.drawLine(g.x * 4, y * 4, n.x * 4, y1 * 4);
                     });
                 });
             }
