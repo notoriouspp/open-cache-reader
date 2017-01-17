@@ -1,8 +1,6 @@
 package org.dreambot.algos.search.astar;
 
-import notoscripts.scripts.pestcontrol.wrapper.IslandTile;
-import org.dreambot.api.Client;
-import org.dreambot.api.methods.map.Tile;
+import java.awt.*;
 
 /**
  * Created with IntelliJ IDEA.
@@ -12,15 +10,15 @@ import org.dreambot.api.methods.map.Tile;
  * @since : 7/2/2015
  * Time : 3:50 PM
  */
-public class IslandPathNode implements Comparable<IslandPathNode>{
+public class PathNode implements Comparable<PathNode>{
 
-    private IslandPathNode owner;
-    private IslandTile current;
-    private IslandTile start;
-    private IslandTile destination;
+    private PathNode owner;
+    private TileNode current;
+    private TileNode start;
+    private TileNode destination;
 
 
-    public IslandPathNode(IslandTile current, IslandTile start, IslandTile destination) {
+    public PathNode(TileNode current, TileNode start, TileNode destination) {
         this.current = current;
         this.start = start;
         this.destination = destination;
@@ -34,15 +32,15 @@ public class IslandPathNode implements Comparable<IslandPathNode>{
         return current.getY();
     }
 
-    public IslandPathNode getOwner() {
+    public PathNode getOwner() {
         return owner;
     }
 
-    public Tile toTile (Client client){
-        return new Tile(getX() + client.getBaseX(), getY() + client.getBaseY());
+    public Tile toTile (Point base){
+        return new Tile(getX() + base.x, getY() + base.y);
     }
 
-    public void setOwner(IslandPathNode owner) {
+    public void setOwner(PathNode owner) {
         this.owner = owner;
     }
 
@@ -58,13 +56,18 @@ public class IslandPathNode implements Comparable<IslandPathNode>{
 
     @Override
     public boolean equals(Object obj) {
-        return obj instanceof IslandPathNode
-                && ((IslandPathNode) obj).getX() == getX()
-                && ((IslandPathNode) obj).getY() == getY();
+        return obj instanceof PathNode
+                && ((PathNode) obj).getX() == getX()
+                && ((PathNode) obj).getY() == getY();
     }
 
     @Override
-    public int compareTo(IslandPathNode o) {
+    public String toString() {
+        return new Point(getX(), getY()).toString();
+    }
+
+    @Override
+    public int compareTo(PathNode o) {
         return (int)((getCost() * 100) - (o.getCost() * 100));
     }
 }

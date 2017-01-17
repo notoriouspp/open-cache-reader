@@ -1,5 +1,7 @@
 package org.dreambot.cache.game.impl.runescape.oldschool.region;
 
+import org.dreambot.algos.search.astar.CollisionPathFinder;
+import org.dreambot.algos.search.astar.TileNode;
 import org.dreambot.cache.fs.runescape.Container;
 import org.dreambot.cache.fs.runescape.XTEALoader;
 import org.dreambot.cache.fs.runescape.data.CacheIndex;
@@ -9,6 +11,7 @@ import org.dreambot.cache.io.ByteBufferUtils;
 import org.dreambot.cache.tools.CacheManager;
 import org.dreambot.cache.tools.TileFlags;
 
+import java.awt.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -22,17 +25,25 @@ import static org.dreambot.util.Constants.PLANES;
 public class RSRegionBlock {
 
     private final RSTile[][][] tiles = new RSTile[PLANES][BLOCK_SIZE][BLOCK_SIZE];
+    private final Region region;
 
     public CollisionMap[] maps;
+    public CollisionPathFinder[] pathFinders;
     public int blockX;
     public int blockY;
+    private int regionID;
 
-    public RSRegionBlock(int blockX, int blockY, boolean loadLandscape) {
+    public RSRegionBlock(Region region, int blockX, int blockY, boolean loadLandscape) {
+        this.region = region;
         this.blockX = blockX;
         this.blockY = blockY;
+        regionID = -1;
         this.maps = new CollisionMap[PLANES];
+        this.pathFinders = new CollisionPathFinder[PLANES];
         for(int z = 0; z < PLANES; z++){
-            this.maps[z] = new CollisionMap(this, BLOCK_SIZE, BLOCK_SIZE);
+            CollisionMap map = new CollisionMap(this, BLOCK_SIZE, BLOCK_SIZE, z);
+            this.maps[z] = map;
+            this.pathFinders[z] = new CollisionPathFinder(map, z);
         }
         int terrainID = CacheManager.getFileID(Region.TABLE, "m" + blockX + "_" + blockY);
         int landscapeID = CacheManager.getFileID(Region.TABLE, "l" + blockX + "_" + blockY);
@@ -47,7 +58,7 @@ public class RSRegionBlock {
                     }
                 }
                 if (loadLandscape) {
-                    int regionID = (blockX << 8 | blockY);
+                    regionID = (blockX << 8 | blockY);
                     int[] keys = XTEALoader.getKeys(regionID);
                     if (keys[0] != 0 && keys[1] != 0 && keys[2] != 0 && keys[3] != 0) {
                         System.out.println(regionID);
@@ -56,10 +67,33 @@ public class RSRegionBlock {
                     }
                 }
                 createRegionScene();
+                System.out.println("Constructing Pathfinders...");
+                for(CollisionPathFinder finder : pathFinders){
+                    finder.construct();
+                }
             } catch (IOException e) {
                 System.err.println("Couldn't read: " + blockX + "_" + blockY);
             }
         }
+    }
+
+
+    private TileNode[][] getRawNodeMap(int plane, int step) {
+        TileNode[][] nodes = new TileNode[BLOCK_SIZE][BLOCK_SIZE];
+        for(int x = 0; x < BLOCK_SIZE; x += step){
+            for(int y = 0; y < BLOCK_SIZE; y += step){
+                int flag = maps[plane].clipData[x][y];
+                TileNode tileNode = new TileNode(x, y, plane, flag);
+                nodes[x][y] = tileNode;
+            }
+        }
+        return nodes;
+    }
+
+    public Point getGameWorldCoordinate() {
+        int x = (regionID >> 8) << 6;
+        int y = (regionID & 0xFF) << 6;
+        return new Point(x, y);
     }
 
     private void createRegionScene() {
@@ -78,6 +112,9 @@ public class RSRegionBlock {
                                 originalPlane = plane - 1;
                             }
                             if (originalPlane >= 0) {
+                                int x_ = (blockX - region.startX) * BLOCK_SIZE; //adding block base
+                                int y_ = (blockY - region.startY) * BLOCK_SIZE; //adding block base
+                                region.collisionMaps[originalPlane].markBlocked(x + x_, y + y_);
                                 maps[originalPlane].markBlocked(x, y);
                             }
                         }
@@ -90,7 +127,10 @@ public class RSRegionBlock {
                 RSTile tile = getTile(1, x, y);
                 if(tile != null) {
                     if ((tile.flag & 2) == 2) {
-                        maps[0].clipData[x][y] = TileFlags.UNLOADED_;
+                        int x_ = (blockX - region.startX) * BLOCK_SIZE; //adding block base
+                        int y_ = (blockY - region.startY) * BLOCK_SIZE; //adding block base
+                        region.collisionMaps[0].clipData[x + x_][y + y_] = TileFlags.UNLOADED;
+                        maps[0].clipData[x][y] = TileFlags.UNLOADED;
                     }
                 }
             }
@@ -125,6 +165,7 @@ public class RSRegionBlock {
                         }
                         RSObject object = new RSObject(tile.x, tile.y, objectId, objSetting, objType, objFace, mapZ);
                         maps[mapZ].mark(object);
+                        region.collisionMaps[mapZ].mark(this, object);
                         tile.objects.add(object);
                     }
                 } while (true);

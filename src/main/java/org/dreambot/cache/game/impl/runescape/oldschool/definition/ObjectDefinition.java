@@ -67,6 +67,7 @@ public class ObjectDefinition {
     private byte lightDiffuse;
     public int sizeX;
     private int translateY;
+    private boolean interactable;
     public int icon;
     private int[] originalModelColors;
     private int modelSizeX;
@@ -112,6 +113,7 @@ public class ObjectDefinition {
         sizeX = 1;
         sizeY = 1;
         solid = true;
+        impenetrable = true;
         actionsBoolean = false;
         adjustToTerrain = false;
         delayShading = false;
@@ -205,10 +207,9 @@ public class ObjectDefinition {
             } else if (opcode == 15) {
                 def.sizeY = buffer.get() & 0xFF;
             } else if (opcode == 17) {
-//				def.anInt2163 = 0;
                 def.solid = false;
             } else if (opcode == 18) {
-                def.solid = false;
+                def.impenetrable = false;
             } else if (opcode == 19) {
                 hasActionsInt = buffer.get() & 0xFF;
                 if (hasActionsInt == 1) {
@@ -285,7 +286,7 @@ public class ObjectDefinition {
                 def.unknown = true;
             } else if (opcode == 74) {
                 def.solid = false;
-                def.impenetrable = true;
+                def.impenetrable = false;
             } else if (opcode == 75) {
                 def.solidInt = buffer.get() & 0xFF;
             } else if (opcode == 77) {
@@ -335,13 +336,9 @@ public class ObjectDefinition {
             }
         }
         if (hasActionsInt == -1) {
-            def.actionsBoolean = false;
-            if (def.modelIds != null && (def.modelTypes == null || def.modelTypes[0] == 10)) {
-                def.actionsBoolean = true;
-            }
-            if (def.actions != null) {
-                def.actionsBoolean = true;
-            }
+            def.interactable = def.modelIds != null && (def.modelTypes == null || def.modelTypes[0] == 10);
+            if (def.actions != null)
+                def.interactable = true;
         }
         return def;
     }

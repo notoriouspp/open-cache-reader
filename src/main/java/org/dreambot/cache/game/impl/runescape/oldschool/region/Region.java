@@ -1,6 +1,7 @@
 package org.dreambot.cache.game.impl.runescape.oldschool.region;
 
-import org.dreambot.algos.search.NotoSearch;
+import org.dreambot.algos.search.astar.Tile;
+import org.dreambot.algos.search.astar.TileNode;
 import org.dreambot.cache.game.impl.runescape.oldschool.definition.ObjectDefinition;
 import org.dreambot.cache.fs.runescape.Container;
 import org.dreambot.cache.fs.runescape.ReferenceTable;
@@ -10,12 +11,12 @@ import org.dreambot.cache.game.impl.runescape.oldschool.region.object.RSObject;
 import org.dreambot.cache.game.impl.runescape.oldschool.region.tile.RSTile;
 import org.dreambot.cache.tools.CacheManager;
 import org.dreambot.cache.tools.TileFlags;
-import org.dreambot.util.StdDraw;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -70,8 +71,10 @@ public class Region {
      * The blocks of this region.
      */
     public final RSRegionBlock[][] blocks;
-    private int sizeX;
-    private int sizeY;
+    public final RCollisionMap[] collisionMaps;
+    public final RegionPathFinder[] pathFinders;
+    public int sizeX;
+    public int sizeY;
 
 
     /**
@@ -95,8 +98,9 @@ public class Region {
     public Region(int startX, int startY, int sizeX, int sizeY) {
         this.startX = startX;
         this.startY = startY;
-         blocks = new RSRegionBlock[MAX_BLOCKS][MAX_BLOCKS];
-
+        blocks = new RSRegionBlock[MAX_BLOCKS][MAX_BLOCKS];
+        collisionMaps = new RCollisionMap[PLANES];
+        pathFinders = new RegionPathFinder[PLANES];
         int maxBlockX = Integer.MIN_VALUE;
         int maxBlockY = Integer.MIN_VALUE;
 
@@ -114,7 +118,7 @@ public class Region {
                 int terrainID = CacheManager.getFileID(TABLE, "m" + blockX + "_" + blockY);
                 int landscapeID = CacheManager.getFileID(TABLE, "l" + blockX + "_" + blockY);
                 if (terrainID != -1 && landscapeID != -1) {
-                    tasks.add(new RSRegionBlockCallable(blockX, blockY));
+                    tasks.add(new RSRegionBlockCallable(this, blockX, blockY));
                     if (blockX > maxBlockX) {
                         maxBlockX = blockX;
                     }
@@ -130,10 +134,16 @@ public class Region {
                 }
             }
         }
-        loadBlocks(tasks);
 
         this.tilesDimension.setSize(sizeX, sizeY);
         this.tilesDimension.setSize((int) (BLOCK_SIZE * this.tilesDimension.getWidth()), (int) (BLOCK_SIZE * this.tilesDimension.getHeight()));
+        for(int z = 0; z < PLANES; z++){
+            collisionMaps[z] = new RCollisionMap(this, z);
+        }
+        loadBlocks(tasks);
+        for(int z = 0; z < PLANES; z++){
+            pathFinders[z] = new RegionPathFinder(this, collisionMaps[z], z).construct();
+        }
 
         System.out.println("Loaded region blocks and found:");
         System.out.println("----------------------------------------------------");
@@ -151,69 +161,37 @@ public class Region {
     public BufferedImage getCollisionRender(int plane, int scale) {
         BufferedImage image = new BufferedImage(tilesDimension.width * scale, tilesDimension.height * scale, BufferedImage.TYPE_INT_ARGB);
         Graphics2D graphics = image.createGraphics();
-        graphics.setStroke(new BasicStroke(2));
         graphics.setComposite(AlphaComposite.SrcOver.derive(0.5f));
         for (int x = 0; x < tilesDimension.width; x++) {
             for (int y = 0; y < tilesDimension.height; y++) {
-                graphics.setColor(isClipped(x, y) ? Color.RED : Color.GREEN);
-                graphics.fill(new Rectangle(x * scale, (tilesDimension.height - y) * scale, 1, 1));
+                RSRegionBlock block = blocks[getBlockX(x)][getBlockY(y)];
+                if(block != null){
+                    int flag = block.maps[0].clipData[getBlockTileX(x, block.blockX)][getBlockTileY(y, block.blockY)];
+                    graphics.setColor((flag & (TileFlags.WALL_NORTH)) != 0 ? Color.RED : Color.GREEN);
+                    graphics.fill(new Rectangle(x * scale, (tilesDimension.height - y) * scale, scale, scale));
+                }
             }
         }
         return image;
     }
 
-    public java.util.List<NotoSearch.SearchNode> generate(int plane, int step) {
-        NotoSearch.SearchNode[][] nodes = getRawNodeMap(step);
-        for (int x = 0; x < tilesDimension.width; x++) {
-            for (int y = 0; y < tilesDimension.height; y++) {
-                int mx = getBlockX(x);
-                int my = getBlockY(y);
-                RSRegionBlock block = blocks[mx][my];
-                if(block != null) {
-                    CollisionMap map = block.maps[plane];
-                    mx = getBlockTileX(x, mx);
-                    my = getBlockTileY(y, my);
-                    if (mx > step) {
-                        int x_ = mx - step;
-                        translate(map, nodes, mx, my, x_, 0, TileFlags.WALL_WEST);
-                    }
-                    if (mx < map.clipWidth - step) {
-                        int x_ = mx + step;
-                        translate(map, nodes, mx, my, x_, 0, TileFlags.WALL_EAST);
-                    }
-                    if (my > step) {
-                        int y_ = my - step;
-                        translate(map, nodes, mx, my, 0, y_, TileFlags.WALL_NORTH);
-                    }
-                    if (my < map.clipHeight - step) {
-                        int y_ = my + step;
-                        translate(map, nodes, mx, my, 0, y_, TileFlags.WALL_SOUTH);
-                    }
-                }
+    public List<TileNode> getCollisionNodeMap(int plane, int step) {
+        TileNode[][] nodes = new TileNode[sizeX * BLOCK_SIZE][sizeY * BLOCK_SIZE];
+        for(int x = 0; x < tilesDimension.width; x += step){
+            int blockX = getBlockX(x);
+            for(int y = 0; y < tilesDimension.height; y += step) {
+                int blockY = getBlockY(y);
+                RSRegionBlock block = blocks[blockX][blockY];
+                nodes[x][y] = new TileNode(x, y, plane, block.maps[plane].clipData[getBlockTileX(x, blockX)][getBlockTileY(y, blockY)]);
+            }
+        }
+        for(int x = 0; x < tilesDimension.width; x += step){
+            for(int y = 0; y < tilesDimension.height; y += step) {
+                TileNode root = nodes[x][y];
+                root.connect(nodes, pathFinders[plane], step);
             }
         }
         return Stream.of(nodes).flatMap(Stream::of).collect(Collectors.toList());
-    }
-
-    private static void translate(CollisionMap map, NotoSearch.SearchNode[][] nodes, int x, int y, int x_, int y_, int flag) {
-        if((map.clipData[x_][y_] & flag) != 0){
-            NotoSearch.SearchNode root = nodes[x][y];
-            NotoSearch.SearchNode translated = nodes[x_][y_];
-            if(!root.children.contains(translated) && !translated.children.contains(root)) {
-                translated.children.add(root);
-                root.children.add(translated);
-            }
-        }
-    }
-
-    private NotoSearch.SearchNode[][] getRawNodeMap(int step) {
-        NotoSearch.SearchNode[][] nodes = new NotoSearch.SearchNode[(sizeX * BLOCK_SIZE) / step][(sizeY * BLOCK_SIZE) / step];
-        for(int x = 0; x < tilesDimension.width; x += step){
-            for(int y = 0; y < tilesDimension.height; y += step){
-                nodes[x][y] = new NotoSearch.SearchNode(x, y);
-            }
-        }
-        return nodes;
     }
 
     /**
@@ -254,6 +232,19 @@ public class Region {
             return null;
         }
         return rsRegionBlock.getTile(tileZ, getBlockTileX(tileX, blockX), getBlockTileY(tileY, blockY));
+    }
+
+    public boolean isBlockedTile(int x, int y, int z) {
+        RSTile tile = getTile(x, y, z);
+        if(tile != null){
+            for (RSObject object : tile.objects) {
+                ObjectDefinition def = object.getDef();
+                if (object.isWall() || def.impenetrable || !def.solid) {
+                    return true;
+                }
+            }
+        }
+        return tile != null && (tile.flag & 0x1) == 1;
     }
 
     /**
@@ -306,7 +297,41 @@ public class Region {
      * @param y - the tile's global 'y'
      * @return whether it is.
      */
-    public boolean isClipped(int x, int y) {
+    public boolean isClipped(int x, int y, int z) {
+        RSTile tile = getTile(x, y, z);
+        if (tile == null) {
+            return true;
+        }
+        boolean wall = false;
+        int flag = tile.flag;
+        for (RSObject object : tile.objects) {
+            ObjectDefinition def = object.getDef();
+            if (def.actions != null && Arrays.asList(def.actions).contains("Open")) {
+                return false;
+            }
+            if (def.name != null && (def.name.contains("Gate") || def.name.contains("Door"))) {
+                return false;
+            }
+            if (object.isWall() || def.impenetrable || !def.solid) {
+                wall = true;
+                break;
+            }
+        }
+        if(z == 0) {
+            for (int plane = 0; plane < PLANES; plane++) {
+                tile = getTile(x, y, plane);
+                if (tile != null) {
+                    boolean isBridge = (tile.flag & 0x2) == 0x2;
+                    if (isBridge) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return (flag & 0x1) == 0x1 || wall;
+    }
+
+    public boolean isStrictClipped(int x, int y) {
         RSTile tile = getTile(x, y, 0);
         if (tile == null) {
             return true;
@@ -352,14 +377,16 @@ public class Region {
 
         private final int blockX;
         private final int blockY;
+        private final Region region;
 
-        public RSRegionBlockCallable(int blockX, int blockY) {
+        public RSRegionBlockCallable(Region region, int blockX, int blockY) {
+            this.region = region;
             this.blockX = blockX;
             this.blockY = blockY;
         }
 
         public RSRegionBlock call() throws Exception {
-            return new RSRegionBlock(blockX, blockY, true);
+            return new RSRegionBlock(region, blockX, blockY, true);
         }
     }
 }

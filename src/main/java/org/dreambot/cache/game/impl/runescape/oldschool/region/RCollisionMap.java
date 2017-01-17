@@ -7,15 +7,18 @@ import org.dreambot.cache.tools.TileFlags;
 import java.util.Arrays;
 
 import static org.dreambot.cache.tools.TileFlags.*;
+import static org.dreambot.cache.tools.TileFlags.WALL_NORTHEAST;
+import static org.dreambot.cache.tools.TileFlags.WALL_SOUTHEAST;
+import static org.dreambot.util.Constants.BLOCK_SIZE;
 
 /**
  * ....
  *
  * @author Notorious
  * @version 0.0.1
- * @since 1/14/2017
+ * @since 1/17/2017
  */
-public class CollisionMap {
+public class RCollisionMap {
 
     public int setX = 0;
     public int clipHeight;
@@ -23,19 +26,15 @@ public class CollisionMap {
     public int setY = 0;
     public int z;
     public int[][] clipData;
-    private RSRegionBlock block;
+    private Region region;
 
-    public CollisionMap(RSRegionBlock block, int clipWidth, int clipHeight, int z) {
-        this.block = block;
+    public RCollisionMap(Region region, int z) {
+        this.region = region;
         this.z = z;
-        this.clipWidth = clipWidth;
-        this.clipHeight = clipHeight;
+        this.clipWidth = region.tilesDimension.width;
+        this.clipHeight = region.tilesDimension.height;
         this.clipData = new int[this.clipWidth][this.clipHeight];
         this.reset();
-    }
-
-    public RSRegionBlock getBlock() {
-        return block;
     }
 
     public void reset() {
@@ -44,20 +43,20 @@ public class CollisionMap {
                 if(var2 != 0 && 0 != var3 && var2 < this.clipWidth - 5 && var3 < this.clipHeight - 5) {
                     this.clipData[var2][var3] = TileFlags.UNLOADED;
                 } else {
-                    this.clipData[var2][var3] = TileFlags.UNLOADED;
+                    this.clipData[var2][var3] = TileFlags.UNLOADED_;
                 }
             }
         }
     }
 
-    public void mark(RSObject object) {
+    public void mark(RSRegionBlock block, RSObject object) {
         if(object == null){
             return;
         }
         ObjectDefinition objectDefinition = object.getDef();
         if (object.type.ordinal() == 10 || object.type.ordinal() == 11) {
             if (objectDefinition.solid && objectDefinition.name != null)
-                markSolidOccupant(object.x, object.y, object.width, object.height, objectDefinition.solid);
+                markSolidOccupant(block, object.x, object.y, object.width, object.height, objectDefinition.impenetrable);
             return;
         }
         if (object.type.ordinal() == 22) {
@@ -66,37 +65,39 @@ public class CollisionMap {
         }
         if (object.type.ordinal() >= 12) {
             if (objectDefinition.solid && objectDefinition.actionsBoolean)
-                markSolidOccupant(object.x, object.y, object.width, object.height, objectDefinition.impenetrable);
+                markSolidOccupant(block, object.x, object.y, object.width, object.height, objectDefinition.impenetrable);
             return;
         }
         if (object.type.ordinal() == 0) {
             if (objectDefinition.solid)
-                markWall(object.x, object.y, object.type.ordinal(), object.objectOrientation, objectDefinition.impenetrable);
+                markWall(block, object.x, object.y, object.type.ordinal(), object.objectOrientation, objectDefinition.impenetrable);
             return;
         }
         if (object.type.ordinal() == 1) {
             if (objectDefinition.solid)
-                markWall(object.x, object.y, object.type.ordinal(), object.objectOrientation, objectDefinition.impenetrable);
+                markWall(block, object.x, object.y, object.type.ordinal(), object.objectOrientation, objectDefinition.impenetrable);
             return;
         }
         if (object.type.ordinal() == 2) {
             if (objectDefinition.solid)
-                markWall(object.x, object.y, object.type.ordinal(), object.objectOrientation, objectDefinition.impenetrable);
+                markWall(block, object.x, object.y, object.type.ordinal(), object.objectOrientation, objectDefinition.impenetrable);
             return;
         }
         if (object.type.ordinal() == 3) {
             if (objectDefinition.solid)
-                markWall(object.x, object.y, object.type.ordinal(), object.objectOrientation, objectDefinition.impenetrable);
+                markWall(block, object.x, object.y, object.type.ordinal(), object.objectOrientation, objectDefinition.impenetrable);
             return;
         }
         if (object.type.ordinal() == 9) {
             if (objectDefinition.solid)
-                markSolidOccupant(object.x, object.y, object.width, object.height, objectDefinition.impenetrable);
+                markSolidOccupant(block, object.x, object.y, object.width, object.height, objectDefinition.impenetrable);
             return;
         }
     }
 
-    public void markWall(int x, int y, int type, int orientation, boolean impenetrable) {
+    public void markWall(RSRegionBlock block, int x, int y, int type, int orientation, boolean impenetrable) {
+        x += (block.blockX - region.startX) * BLOCK_SIZE; //adding block base
+        y += (block.blockY - region.startY) * BLOCK_SIZE; //adding block base
         x -= this.setX;
         y -= this.setY;
         if(type == 0) {
@@ -242,11 +243,13 @@ public class CollisionMap {
         }
     }
 
-    public void markSolidOccupant(int x, int y, int width, int height, boolean solid) {
+    public void markSolidOccupant(RSRegionBlock block, int x, int y, int width, int height, boolean solid) {
         int var7 = TileFlags.OBJECT_TILE;
         if(solid) {
             var7 += TileFlags.PROJECTILE_BLOCK;
         }
+        x += (block.blockX - region.startX) * BLOCK_SIZE; //adding block base
+        y += (block.blockY - region.startY) * BLOCK_SIZE; //adding block base
         x -= this.setX;
         y -= this.setY;
 
@@ -293,13 +296,21 @@ public class CollisionMap {
         int there = clipData[x2][y2];
         if (!isBlocked(here) && !isBlocked(there)) {
             if (x1 == x2 && y1 - 1 == y2) {
-                walkable = !isCardinalDirectionBlocked(WALL_SOUTH, here, there);
+                walkable = !isCardinalDirectionBlocked(WALL_SOUTH, here, there)
+                        && !isCardinalDirectionBlocked(WALL_BLOCK_SOUTH, here, there)
+                        && !isCardinalDirectionBlocked(WALL_ALLOW_RANGE_SOUTH, here, there);
             } else if (x1 - 1 == x2 && y1 == y2) {
-                walkable = !isCardinalDirectionBlocked(WALL_WEST, here, there);
+                walkable = !isCardinalDirectionBlocked(WALL_WEST, here, there)
+                        && !isCardinalDirectionBlocked(WALL_BLOCK_WEST, here, there)
+                        && !isCardinalDirectionBlocked(WALL_ALLOW_RANGE_WEST, here, there);
             } else if (x1 == x2 && y1 + 1 == y2) {
-                walkable = !isCardinalDirectionBlocked(WALL_NORTH, here, there);
+                walkable = !isCardinalDirectionBlocked(WALL_NORTH, here, there)
+                                && !isCardinalDirectionBlocked(WALL_BLOCK_NORTH, here, there)
+                                && !isCardinalDirectionBlocked(WALL_ALLOW_RANGE_NORTH, here, there);
             } else if (x1 + 1 == x2 && y1 == y2) {
-                walkable = !isCardinalDirectionBlocked(WALL_EAST, here, there);
+                walkable = !isCardinalDirectionBlocked(WALL_EAST, here, there)
+                        && !isCardinalDirectionBlocked(WALL_BLOCK_EAST, here, there)
+                        && !isCardinalDirectionBlocked(WALL_ALLOW_RANGE_EAST, here, there);
             } else if (x1 - 1 == x2 && y1 - 1 == y2) {
                 walkable = !isOrdinalDirectionBlocked(WALL_SOUTHWEST,
                         clipData[x1 + 1][y1 + 1],
@@ -361,7 +372,7 @@ public class CollisionMap {
      * @return true if the tile is blocked, and cannot be walked on; otherwise false.
      */
     public static boolean isBlocked(int flag) {
-        return (flag & (OBJECT_MASK)) != 0;
+        return (flag & (OBJECT_MASK | DECORATION_BLOCK)) != 0;
     }
 
     /**
